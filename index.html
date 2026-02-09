@@ -62,9 +62,10 @@
   resize();
 
   let audio = null;
+  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   const settings = {
-    autoFire: true,
-    portraitOnly: true
+    autoFire: isTouchDevice,
+    portraitOnly: isTouchDevice
   };
   const input = {
     moveX: 0,
@@ -976,8 +977,9 @@
       this.upgradePool = this.buildUpgradePool();
       this.upgradeChoices = [];
       this.pendingRound = null;
-      this.state = 'play';
+      this.state = 'intro';
       this.roundBanner = 2;
+      this.tutorial = 5.5;
       this.setupRound(this.round);
     }
     getRoundGoal() {
@@ -1252,6 +1254,12 @@
         if (this.comboTimer <= 0) this.comboCount = 0;
       }
 
+      if (this.state === 'intro') {
+        for (const p of this.particles) p.update(dt);
+        this.particles = this.particles.filter(p => p.life > 0);
+        return;
+      }
+
       if (this.state === 'upgrade') {
         for (const p of this.particles) p.update(dt);
         this.particles = this.particles.filter(p => p.life > 0);
@@ -1309,6 +1317,13 @@
             pu.vx += (dx / (d || 1)) * 30 * dt;
             pu.vy += (dy / (d || 1)) * 30 * dt;
           }
+        }
+      }
+
+      if (this.tutorial > 0) {
+        this.tutorial = Math.max(0, this.tutorial - dt);
+        if (Math.hypot(input.moveX, input.moveY) > 0.2 || input.fire || keys.Space) {
+          this.tutorial = 0;
         }
       }
 
@@ -1632,6 +1647,64 @@
         ctx.restore();
       }
 
+      if (this.state === 'intro') {
+        ctx.save();
+        ctx.fillStyle = 'rgba(5, 2, 11, 0.85)';
+        ctx.fillRect(0, 0, w / devicePixelRatio, h / devicePixelRatio);
+        ctx.font = '30px monospace';
+        ctx.fillStyle = '#37f9ff';
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#37f9ff';
+        ctx.fillText('NEON VOID', w / devicePixelRatio / 2 - 110, h / devicePixelRatio / 2 - 90);
+        ctx.font = '16px monospace';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#ff3df5';
+        if (isTouchDevice) {
+          ctx.fillStyle = '#ff3df5';
+          ctx.fillText('Left thumb: Move', w / devicePixelRatio / 2 - 90, h / devicePixelRatio / 2 - 30);
+          ctx.fillText('Auto-fire enabled', w / devicePixelRatio / 2 - 90, h / devicePixelRatio / 2 - 10);
+          ctx.fillText('Tap upgrades between rounds', w / devicePixelRatio / 2 - 140, h / devicePixelRatio / 2 + 10);
+          ctx.fillStyle = '#7dff6a';
+          ctx.fillText('Tap to Start', w / devicePixelRatio / 2 - 60, h / devicePixelRatio / 2 + 50);
+        } else {
+          ctx.fillStyle = '#ff3df5';
+          ctx.fillText('Move: Arrow Keys', w / devicePixelRatio / 2 - 90, h / devicePixelRatio / 2 - 30);
+          ctx.fillText('Fire: Space', w / devicePixelRatio / 2 - 60, h / devicePixelRatio / 2 - 10);
+          ctx.fillText('Upgrades: 1-3', w / devicePixelRatio / 2 - 70, h / devicePixelRatio / 2 + 10);
+          ctx.fillStyle = '#7dff6a';
+          ctx.fillText('Press Enter/Space', w / devicePixelRatio / 2 - 80, h / devicePixelRatio / 2 + 50);
+        }
+        ctx.restore();
+      }
+
+      if (this.state === 'play' && this.tutorial > 0) {
+        const alpha = clamp(this.tutorial / 5.5, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = 0.7 * alpha;
+        ctx.fillStyle = 'rgba(8, 4, 18, 0.6)';
+        ctx.fillRect(0, 0, w / devicePixelRatio, h / devicePixelRatio);
+        ctx.font = '16px monospace';
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#37f9ff';
+        if (isTouchDevice) {
+          ctx.fillStyle = '#37f9ff';
+          ctx.fillText('Move', 24, h / devicePixelRatio - 140);
+          ctx.fillText('Auto-fire', w / devicePixelRatio - 140, h / devicePixelRatio - 140);
+          ctx.strokeStyle = '#37f9ff';
+          ctx.beginPath();
+          ctx.arc(90, h / devicePixelRatio - 90, 50, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(w / devicePixelRatio - 90, h / devicePixelRatio - 90, 36, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = '#37f9ff';
+          ctx.fillText('Move: Arrow Keys', w / devicePixelRatio / 2 - 90, h / devicePixelRatio / 2 - 10);
+          ctx.fillText('Fire: Space', w / devicePixelRatio / 2 - 55, h / devicePixelRatio / 2 + 12);
+        }
+        ctx.restore();
+      }
+
       const vw = w / devicePixelRatio;
       const vh = h / devicePixelRatio;
       if (settings.portraitOnly && vw > vh) {
@@ -1679,7 +1752,8 @@
         ctx.shadowColor = '#ff3df5';
         ctx.fillText('GAME OVER', w / devicePixelRatio / 2 - 120, h / devicePixelRatio / 2);
         ctx.font = '16px monospace';
-        ctx.fillText('Press Enter to Restart', w / devicePixelRatio / 2 - 110, h / devicePixelRatio / 2 + 30);
+        const restartLabel = isTouchDevice ? 'Tap to Restart' : 'Press Enter to Restart';
+        ctx.fillText(restartLabel, w / devicePixelRatio / 2 - 110, h / devicePixelRatio / 2 + 30);
       }
       if (this.state === 'win') {
         ctx.font = '40px monospace';
@@ -1688,7 +1762,8 @@
         ctx.shadowColor = '#7dff6a';
         ctx.fillText('NEON VOID CLEARED', w / devicePixelRatio / 2 - 190, h / devicePixelRatio / 2);
         ctx.font = '16px monospace';
-        ctx.fillText('Press Enter to Restart', w / devicePixelRatio / 2 - 110, h / devicePixelRatio / 2 + 30);
+        const restartLabel = isTouchDevice ? 'Tap to Restart' : 'Press Enter to Restart';
+        ctx.fillText(restartLabel, w / devicePixelRatio / 2 - 110, h / devicePixelRatio / 2 + 30);
       }
       ctx.restore();
     }
@@ -1823,8 +1898,17 @@
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    input.usingTouch = true;
+    input.usingTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
     if (audio) audio.ensure();
+    if (game.state === 'over' || game.state === 'win') {
+      game.restart();
+      return;
+    }
+    if (game.state === 'intro') {
+      game.state = 'play';
+      game.tutorial = 5.5;
+      return;
+    }
     if (game.state === 'upgrade') {
       game.handleUpgradeTap(x, y, rect.width, rect.height);
       return;
@@ -1873,6 +1957,12 @@
     if (keys.Enter && (game.state === 'over' || game.state === 'win')) {
       game.restart();
       keys.Enter = false;
+    }
+    if ((keys.Enter || keys.Space) && game.state === 'intro') {
+      game.state = 'play';
+      game.tutorial = 5.5;
+      keys.Enter = false;
+      keys.Space = false;
     }
     if (game.state === 'upgrade') {
       if (keys.Digit1 || keys.Numpad1) {
